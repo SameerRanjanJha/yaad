@@ -1,0 +1,16 @@
+.gradle/
+.kotlin/
+.idea/
+build/
+.cxx/
+local.properties
+*.iml
+*.apk
+*.aab
+
+# The signing key and its passwords are personal: back them up, never publish them.
+keystore/
+keystore.properties
+
+# Downloaded by the build.
+app/src/main/assets/models/

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Yaad</string>
+    <string name="capture_label">Yaad Mic</string>
+    <string name="widget_description">One tap to record a voice note</string>
+    <string name="tile_label">Voice note</string>
+</resources>

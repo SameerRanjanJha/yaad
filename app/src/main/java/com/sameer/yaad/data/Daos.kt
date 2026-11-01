@@ -1,0 +1,65 @@
+package com.sameer.yaad.data
+
+import androidx.room.Dao
+import androidx.room.Insert
+import androidx.room.Query
+import androidx.room.Update
+import com.sameer.yaad.parse.ItemKind
+import kotlinx.coroutines.flow.Flow
+
+@Dao
+interface NoteDao {
+    @Insert
+    suspend fun insert(note: NoteEntity): Long
+
+    @Update
+    suspend fun update(note: NoteEntity)
+
+    @Query("DELETE FROM notes WHERE id = :id")
+    suspend fun delete(id: Long)
+
+    @Query("SELECT * FROM notes WHERE id = :id")
+    suspend fun byId(id: Long): NoteEntity?
+
+    @Query("SELECT * FROM notes ORDER BY createdAt DESC")
+    fun observeAll(): Flow<List<NoteEntity>>
+
+    @Query("SELECT COUNT(*) FROM notes WHERE state IN ('PENDING', 'TRANSCRIBING')")
+    fun observeProcessingCount(): Flow<Int>
+
+    @Query("SELECT * FROM notes WHERE state = 'PENDING' ORDER BY createdAt LIMIT 1")
+    suspend fun nextPending(): NoteEntity?
+
+    @Query("SELECT * FROM notes WHERE state = 'RECORDING' AND createdAt < :before")
+    suspend fun recordingsStartedBefore(before: Long): List<NoteEntity>
+
+    @Query("SELECT * FROM notes WHERE state = 'TRANSCRIBING'")
+    suspend fun inAnalysis(): List<NoteEntity>
+
+    @Query("SELECT EXISTS(SELECT 1 FROM notes WHERE state IN ('PENDING', 'TRANSCRIBING'))")
+    suspend fun hasUnfinished(): Boolean
+
+    @Query("SELECT * FROM notes WHERE state = 'DONE' AND audioPath IS NOT NULL AND createdAt < :before")
+    suspend fun doneWithAudioBefore(before: Long): List<NoteEntity>
+}
+
+@Dao
+interface ItemDao {
+    @Insert
+    suspend fun insertAll(items: List<ItemEntity>)
+
+    @Update
+    suspend fun update(item: ItemEntity)
+
+    @Query("SELECT * FROM items WHERE id = :id")
+    suspend fun byId(id: Long): ItemEntity?
+
+    @Query("SELECT * FROM items WHERE kind = :kind")
+    fun observeByKind(kind: ItemKind): Flow<List<ItemEntity>>
+
+    @Query("SELECT * FROM items WHERE bucket IN ('TODO', 'IN_PROGRESS') AND deadlineEpochDay IS NOT NULL")
+    suspend fun openWithDeadline(): List<ItemEntity>
+
+    @Query("UPDATE items SET lastNotifiedAt = :at WHERE id = :id")
+    suspend fun markNotified(id: Long, at: Long)
+}
