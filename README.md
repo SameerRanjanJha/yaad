@@ -10,7 +10,7 @@ Speech recognition and sorting both run on the device. The app has no internet p
 - **Sorts what you said.** "Call the bank tomorrow, and I have an idea, we could add a dark mode" becomes a task due tomorrow and a separate idea.
 - **Buckets** for tasks and ideas: To do, In progress, Completed and Discarded.
 - **Removes duplicates.** Say the same thing twice and one item stays on your list, keeping any deadline either mention gave. The copy goes to Discarded, where you can restore it.
-- **Reminders** two days before a deadline, one day before and that morning, plus one hour before if you gave a time.
+- **Notifications** the morning before a deadline and on the day itself, plus a check-in at 10 AM every day listing your pending tasks. Nothing pending means no check-in. Android lets you turn each kind off under the app's notification settings.
 - **A plain-text log** of every note at `Documents/Yaad/voice-log.md`. Recordings stay playable for 30 days.
 
 ## How it works
@@ -36,6 +36,7 @@ DuplicateWorker (WorkManager)
 
 - A crash or memory kill in `:analysis` can't touch a recording in progress. Audio reaches disk as you speak, so a crash in the main process loses a moment at most.
 - Waiting notes survive crashes and reboots, and finish without the app being opened.
+- Notifications use one exact alarm, set for whatever is due next. It's worked out again from the database after every change, reboot and clock change, so anything missed while the phone was off shows up once it's back on.
 - The model decides what the items are and what kind they are. Dates are worked out by tested rules from words it has to quote from the note, items it invents are dropped, and items it misses that the rules caught are added back. If it fails, the rules sort the note instead. If it crashes the app, AI sorting turns itself off.
 - Duplicate removal uses plain rules and no model, and it leaves anything uncertain on the list, because a leftover duplicate costs far less than a lost task. It ignores small words, word order and word endings, and knows a few everyday equivalents such as "ring" and "call" or "mom" and "mother". Items with different deadlines stay separate, since "pay rent" for two different dates is two tasks. Completed and discarded items are never compared, and each item is checked once, so one you restore stays on the list.
 
@@ -88,10 +89,11 @@ For the emulator, build with `-Pyaad.abis=x86_64`. Debug builds read `test-audio
 
 ## Known limits
 
-- Recording and transcription have run on a OnePlus Nord 5. AI sorting, crash recovery, reboot recovery and duplicate removal have been tested on an Android 15 emulator.
+- Recording and transcription have run on a OnePlus Nord 5. AI sorting, crash recovery, reboot recovery, duplicate removal and notifications have been tested on an Android 15 emulator.
 - Sorting is built for English. The Hindi + English mode is untested.
 - Duplicate removal only catches repeats worded alike, so "prepare the client slides" and "make the client deck" stay as two items. It's also built for English.
 - Phones can delay background work to save battery, and a delayed note delays its reminders.
+- Setting the phone's date back by several days can hold up notes already in the queue for about that long, because of how Android schedules background jobs.
 - Android doesn't offer third-party lock-screen widgets on most phones, so the lock-screen mic is a permanent notification.
 
 ## Project layout

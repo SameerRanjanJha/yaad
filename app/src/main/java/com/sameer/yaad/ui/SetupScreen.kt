@@ -103,7 +103,7 @@ fun SetupScreen(onDone: () -> Unit) {
             )
             SetupRow(
                 title = "Notifications",
-                body = "Needed for deadline reminders and the lock-screen mic.",
+                body = "Needed for deadline reminders, the daily check-in and the lock-screen mic.",
                 done = status.notifications,
                 action = "Allow",
                 onAction = { requestPermission.launch(Manifest.permission.POST_NOTIFICATIONS) },

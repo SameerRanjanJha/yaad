@@ -63,6 +63,9 @@ interface ItemDao {
     @Query("UPDATE items SET lastNotifiedAt = :at WHERE id = :id")
     suspend fun markNotified(id: Long, at: Long)
 
+    @Query("SELECT * FROM items WHERE kind = 'TASK' AND bucket IN ('TODO', 'IN_PROGRESS')")
+    suspend fun openTasks(): List<ItemEntity>
+
     @Query("SELECT * FROM items WHERE bucket IN ('TODO', 'IN_PROGRESS')")
     suspend fun open(): List<ItemEntity>
 

@@ -23,10 +23,12 @@ object Notifications {
     const val FOREGROUND_ID = 1
     private const val LOCK_SCREEN_MIC_ID = 2
     private const val DUPLICATES_ID = 3
+    private const val DAILY_CHECK_IN_ID = 4
     private const val DEADLINE_ID_BASE = 10_000
     private const val NOTE_RESULT_ID_BASE = 1_000_000
 
     private const val CHANNEL_DEADLINES = "deadlines"
+    private const val CHANNEL_CHECK_IN = "daily_check_in"
     private const val CHANNEL_QUICK_CAPTURE = "quick_capture"
     private const val CHANNEL_WORKING = "working"
     private const val CHANNEL_RESULTS = "results"
@@ -38,6 +40,9 @@ object Notifications {
         manager.createNotificationChannels(
             listOf(
                 NotificationChannel(CHANNEL_DEADLINES, "Deadline reminders", NotificationManager.IMPORTANCE_HIGH).apply {
+                    lockscreenVisibility = Notification.VISIBILITY_PRIVATE
+                },
+                NotificationChannel(CHANNEL_CHECK_IN, "Daily check-in", NotificationManager.IMPORTANCE_DEFAULT).apply {
                     lockscreenVisibility = Notification.VISIBILITY_PRIVATE
                 },
                 // Default importance but no sound: Android can hide "silent" notifications from
@@ -127,6 +132,25 @@ object Notifications {
 
     fun cancelDeadline(context: Context, itemId: Long) = manager(context).cancel(deadlineNotificationId(itemId))
 
+    /** Replaces yesterday's list. With nothing pending, that list just goes away. */
+    internal fun showDailyCheckIn(context: Context, summary: DailyCheckIn.Summary?) {
+        if (summary == null) {
+            manager(context).cancel(DAILY_CHECK_IN_ID)
+            return
+        }
+        if (!canPost(context)) return
+        val notification = NotificationCompat.Builder(context, CHANNEL_CHECK_IN)
+            .setSmallIcon(R.drawable.ic_task)
+            .setContentTitle(summary.title)
+            .setContentText(summary.lines.first())
+            .setStyle(NotificationCompat.BigTextStyle().bigText(summary.lines.joinToString("\n")))
+            .setCategory(NotificationCompat.CATEGORY_REMINDER)
+            .setAutoCancel(true)
+            .setContentIntent(openApp(context))
+            .build()
+        manager(context).notify(DAILY_CHECK_IN_ID, notification)
+    }
+
     /** Confirms what was heard, so a misheard note gets noticed right away. */
     fun showCaptureResult(context: Context, noteId: Long, items: List<ParsedItem>) {
         if (!canPost(context)) return
@@ -175,8 +199,6 @@ object Notifications {
             .build()
         manager(context).notify(noteResultId(noteId), notification)
     }
-
-    private fun plural(count: Int, noun: String) = if (count == 1) "1 $noun" else "$count ${noun}s"
 
     /** One per note: analysis can finish several in a row, and each result should be seen. */
     private fun noteResultId(noteId: Long) = NOTE_RESULT_ID_BASE + noteId.toInt()

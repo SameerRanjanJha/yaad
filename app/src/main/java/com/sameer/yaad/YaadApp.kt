@@ -33,7 +33,7 @@ class YaadApp : Application() {
             .addMigrations(MIGRATION_1_2)
             .build()
     }
-    val reminders by lazy { ReminderEngine(this, database.items()) }
+    val reminders by lazy { ReminderEngine(this, database.items(), prefs) }
     val repository by lazy { YaadRepository(database) { reminders.sync() } }
     val voiceLog by lazy { VoiceLog(this, prefs) }
     val noteProcessor by lazy {

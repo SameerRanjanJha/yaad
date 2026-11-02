@@ -26,6 +26,10 @@ class DeadlineFormatTest {
         assertEquals("You have this due today, 5:00 PM", DeadlineFormat.dueIn(Deadline(today, LocalTime.of(17, 0)), today))
     }
 
+    @Test fun `a reminder shown after its day says it's overdue`() {
+        assertEquals("Overdue: Mon 2 Nov", DeadlineFormat.dueIn(Deadline(today.minusDays(2)), today))
+    }
+
     @Test fun `a date-only deadline lasts until the evening`() {
         assertFalse(DeadlineFormat.isOverdue(Deadline(today), LocalDateTime.of(2026, 11, 4, 17, 0)))
         assertTrue(DeadlineFormat.isOverdue(Deadline(today), LocalDateTime.of(2026, 11, 4, 19, 0)))

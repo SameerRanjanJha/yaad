@@ -23,9 +23,12 @@ object DeadlineFormat {
     /** The headline of a reminder notification. */
     fun dueIn(deadline: Deadline, today: LocalDate): String {
         val time = deadline.time?.let { ", ${TIME.format(it)}" }.orEmpty()
-        return when (val days = ChronoUnit.DAYS.between(today, deadline.date)) {
-            0L -> "You have this due today$time"
-            1L -> "You have this due tomorrow$time"
+        val days = ChronoUnit.DAYS.between(today, deadline.date)
+        return when {
+            // A reminder the phone was off for can show after the day has gone.
+            days < 0L -> "Overdue: ${label(deadline, today)}"
+            days == 0L -> "You have this due today$time"
+            days == 1L -> "You have this due tomorrow$time"
             else -> "You have this due in $days days$time"
         }
     }
