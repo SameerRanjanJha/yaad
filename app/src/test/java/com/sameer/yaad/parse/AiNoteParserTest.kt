@@ -97,6 +97,56 @@ class AiNoteParserTest {
         assertEquals(listOf("Write a weekly blog about what we learn"), items.map { it.title })
     }
 
+    @Test fun `a date said about another item is not copied`() {
+        val items = parser(reply(item("task", "Pay the electricity bill", "the 10th"), item("task", "Get the AC serviced", "the 10th")))
+            .parse("I need to pay the electricity bill. The electricity bill is due on the 10th. Also get the AC serviced. It is not cooling properly.", now)
+        assertEquals(LocalDate.of(2026, 11, 10), items[0].deadline?.date)
+        assertNull(items[1].deadline)
+    }
+
+    @Test fun `a date said on its own still counts`() {
+        val item = parser(reply(item("task", "Submit the application", "Friday")))
+            .parse("Friday is the last day. Submit the application.", now).single()
+        assertEquals(friday, item.deadline?.date)
+    }
+
+    @Test fun `two items in one sentence can share a date`() {
+        val items = parser(reply(item("task", "Call Ravi", "tomorrow"), item("task", "Email Priya", "tomorrow")))
+            .parse("Tomorrow I have to call Ravi and email Priya.", now)
+        assertEquals(listOf(thursday, thursday), items.map { it.deadline?.date })
+    }
+
+    @Test fun `an order word the model quoted is not a date`() {
+        val item = parser(reply(item("task", "Transfer the money", "first"))).parse("I should transfer the money first.", now).single()
+        assertNull(item.deadline)
+    }
+
+    @Test fun `the model restating a task is one item`() {
+        val items = parser(reply(item("task", "Call the bank tomorrow", "tomorrow"), item("task", "Call the bank tomorrow", "tomorrow"), item("task", "Call the bank", "before five")))
+            .parse("I have to call the bank tomorrow. Yeah, call the bank tomorrow. The bank closes at five so I have to call before five.", now)
+        assertEquals(listOf("Call the bank"), items.map { it.title })
+        assertEquals(thursday, items.single().deadline?.date)
+    }
+
+    @Test fun `a sentence the model passed over becomes detail, not an idea`() {
+        val item = parser(reply(item("task", "Call the service guy")))
+            .parse("Call the service guy. His number is in my phone.", now).single()
+        assertEquals("Call the service guy", item.title)
+        assertEquals("His number is in my phone", item.detail)
+    }
+
+    @Test fun `an idea the model dropped is still added back`() {
+        val items = parser(reply(item("task", "Call the bank")))
+            .parse("Call the bank. Maybe we could add a dark mode.", now)
+        assertEquals(listOf(TASK, IDEA), items.map { it.kind })
+    }
+
+    @Test fun `a long idea that also mentions a task is kept`() {
+        val note = "okay so tomorrow I have to pick up the car from service and also the landing page could use a better headline maybe something about AI and I should call Ravi about the contract on Thursday"
+        val items = parser(reply(item("task", "Pick up the car from service", "tomorrow"), item("task", "Call Ravi about the contract", "Thursday"))).parse(note, now)
+        assertTrue(items.map { it.title }.toString(), items.any { it.kind == IDEA && "headline" in it.title })
+    }
+
     @Test fun `a subject copied from the prompt's examples is rejected`() {
         val items = parser(reply(item("idea", "Daily digest email for tracking habits")))
             .parse("What if the app had a daily digest email?", now)
@@ -127,7 +177,7 @@ class AiNoteParserTest {
     @Test fun `long notes go through in pieces and every piece is kept`() {
         val prompts = mutableListOf<String>()
         val long = (1..40).joinToString(" ") { "Sentence number $it talks about the quarterly budget review." }
-        val parser = AiNoteParser({ prompts += it; reply(item("idea", "Quarterly budget review")) }, NoteParser(), prefill = "")
+        val parser = AiNoteParser({ prompts += it; reply(item("idea", "Quarterly budget review number ${prompts.size}")) }, NoteParser(), prefill = "")
         val items = parser.parse(long, now)
         assertTrue("sent ${prompts.size} pieces", prompts.size > 1)
         assertEquals(prompts.size, items.size)

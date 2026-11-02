@@ -8,7 +8,7 @@ import org.json.JSONObject
  * Sorts a note using a language model on the phone. The model decides what the items are and
  * what kind they are. It isn't trusted with anything else: dates are worked out by the tested
  * [DeadlineExtractor] from words the model must quote from the note, anything it invents is
- * dropped, and anything it misses that the rules caught is added back. If it fails in any way,
+ * dropped, and any task it misses that the rules caught is added back. If it fails in any way,
  * the note is sorted by the rules instead, so nothing is lost.
  */
 class AiNoteParser(
@@ -22,8 +22,15 @@ class AiNoteParser(
             readModelItems(chunk, transcript, now) ?: return fromRules
         }
         if (fromModel.isEmpty()) return fromRules
-        return fromModel.map { recoverMissedDeadline(it, fromRules) } + itemsTheModelMissed(fromModel, fromRules)
+        val (missed, background) = itemsTheModelMissed(fromModel, fromRules).partition(::isRealItem)
+        val recovered = fromModel.map { keepDetailFromRules(recoverMissedDeadline(it, fromRules), fromRules) }
+        return NoteTidier.tidy(recovered + missed, background)
     }
+
+    /** The rules make an idea of anything they can't place, so one the model passed over is usually background. */
+    private fun isRealItem(item: ParsedItem): Boolean = item.kind == ItemKind.TASK || isPlainIdea(item)
+
+    private fun isPlainIdea(item: ParsedItem): Boolean = item.kind == ItemKind.IDEA && Language.readsAsIdea(item.title)
 
     private fun readModelItems(chunk: String, transcript: String, now: LocalDateTime): List<ParsedItem>? {
         val reply = generate(AiNotePrompt.build(chunk, prefill)) ?: return null
@@ -32,24 +39,46 @@ class AiNoteParser(
         } catch (_: JSONException) {
             return null
         }
-        return (0 until array.length()).mapNotNull { index ->
-            val item = array.getJSONObject(index)
-            toParsedItem(item.getString("type"), item.getString("title"), item.getString("when"), transcript, now)
+        val replies = (0 until array.length()).map { array.getJSONObject(it) }
+        val titles = replies.map { it.getString("title") }
+        return replies.mapNotNull { item ->
+            toParsedItem(item.getString("type"), item.getString("title"), item.getString("when"), titles, transcript, now)
         }
     }
 
-    private fun toParsedItem(type: String, rawTitle: String, rawWhen: String, transcript: String, now: LocalDateTime): ParsedItem? {
+    private fun toParsedItem(
+        type: String,
+        rawTitle: String,
+        rawWhen: String,
+        allTitles: List<String>,
+        transcript: String,
+        now: LocalDateTime,
+    ): ParsedItem? {
         val kind = if (type == "task") ItemKind.TASK else ItemKind.IDEA
         val titleWithoutDate = if (kind == ItemKind.TASK) DeadlineExtractor(now).extract(rawTitle).remainder else rawTitle
         val title = Language.cleanTitle(titleWithoutDate)
         if (title.isBlank() || !comesFromNote(title, transcript)) return null
-        val deadline = if (kind == ItemKind.TASK) resolveDeadline(rawWhen, transcript, now) else null
+        val spoken = rawWhen.trim()
+        val saidAboutThis = !saidAboutAnotherItem(spoken, rawTitle, allTitles, transcript)
+        val deadline = if (kind == ItemKind.TASK && saidAboutThis) resolveDeadline(spoken, transcript, now) else null
         return ParsedItem(kind, title, deadline = deadline)
     }
 
-    private fun resolveDeadline(spoken: String, transcript: String, now: LocalDateTime): Deadline? {
-        val words = spoken.trim()
+    /** A small model tends to copy one item's date onto the next, which would set off a reminder on the wrong day. */
+    private fun saidAboutAnotherItem(spoken: String, title: String, allTitles: List<String>, transcript: String): Boolean {
+        val own = contentWords(title)
+        val others = allTitles.flatMap(::contentWords).toSet() - own
+        val sentences = transcript.split(SENTENCE_END).filter { it.contains(spoken, ignoreCase = true) }
+        return spoken.isNotEmpty() && sentences.isNotEmpty() && sentences.all { sentence ->
+            val words = contentWords(sentence)
+            words.none { it in own } && words.any { it in others }
+        }
+    }
+
+    private fun resolveDeadline(words: String, transcript: String, now: LocalDateTime): Deadline? {
         if (words.isEmpty() || !transcript.contains(words, ignoreCase = true)) return null
+        // "Transfer the money first": without this, "by first" reads as the 1st of the month.
+        if (words.lowercase() in ORDER_WORDS) return null
         val extractor = DeadlineExtractor(now)
         // "5th" only reads as a date after a word like "by", which the model may have left out.
         return listOf(words, "by $words", "on $words").firstNotNullOfOrNull { extractor.extract(it).deadline }
@@ -66,13 +95,25 @@ class AiNoteParser(
         return match?.let { item.copy(deadline = it.deadline) } ?: item
     }
 
-    /** Items only the rules found. A stray extra item is better than a lost one. */
+    /** The model only gives titles, so what else was said about a task comes from the rules. */
+    private fun keepDetailFromRules(item: ParsedItem, fromRules: List<ParsedItem>): ParsedItem {
+        val itemWords = contentWords(item.title)
+        if (itemWords.isEmpty()) return item
+        val match = fromRules.firstOrNull { rule ->
+            rule.detail != null && contentWords(rule.title).intersect(itemWords).size * 2 >= itemWords.size
+        }
+        return match?.let { item.copy(detail = it.detail) } ?: item
+    }
+
+    /** What only the rules found. */
     private fun itemsTheModelMissed(fromModel: List<ParsedItem>, fromRules: List<ParsedItem>): List<ParsedItem> {
         val covered = fromModel.flatMap { contentWords(it.title) }.toSet()
         return fromRules.filter { rule ->
             val words = contentWords(rule.title)
             // The rules' titles run long, so a partly covered one is usually the same thing said at length.
-            words.isNotEmpty() && words.count { it in covered } * 3 < words.size
+            // A plain idea gets less benefit of the doubt, since it can run on into a task the model did pick up.
+            val shareNeeded = if (isPlainIdea(rule)) 2 else 3
+            words.isNotEmpty() && words.count { it in covered } * shareNeeded < words.size
         }
     }
 
@@ -113,6 +154,7 @@ class AiNoteParser(
 
     private companion object {
         val WORD = Regex("""[\p{L}\p{N}']+""")
+        val SENTENCE_END = Regex("""(?<=[.!?;])\s+""")
         val STOP_WORDS = setOf(
             "the", "and", "for", "with", "about", "from", "that", "this", "these", "those", "then", "than",
             "you", "your", "our", "his", "her", "they", "them", "can", "could", "should", "would", "will",
@@ -120,6 +162,7 @@ class AiNoteParser(
             "also", "maybe", "some", "there", "here", "into", "out", "use", "using",
             "don't", "want", "it's", "i'm", "i'll", "one", "thing", "try",
         )
+        val ORDER_WORDS = setOf("first", "second", "third", "fourth", "fifth", "next", "last", "then")
         const val STEM_LENGTH = 5
         const val MIN_WORD_LENGTH = 3
         const val MIN_CHUNK_CHARS = 500

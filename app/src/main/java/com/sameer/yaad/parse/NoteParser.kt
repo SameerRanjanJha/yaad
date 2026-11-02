@@ -17,9 +17,9 @@ class NoteParser {
         for (sentence in text.split(SENTENCE_BOUNDARY).filter { it.isNotBlank() }) {
             parseSentence(sentence, extractor, builder)
         }
-        return builder.items().ifEmpty {
-            listOf(ParsedItem(ItemKind.IDEA, Language.titleCase(text.trim())))
-        }
+        return NoteTidier.tidy(
+            builder.items().ifEmpty { listOf(ParsedItem(ItemKind.IDEA, Language.titleCase(text.trim()))) },
+        )
     }
 
     private fun parseSentence(sentence: String, extractor: DeadlineExtractor, builder: ItemBuilder) {

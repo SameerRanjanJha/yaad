@@ -26,8 +26,8 @@ android {
         // Android 12: the first version that can run a background job at once with no notification.
         minSdk = 31
         targetSdk = 35
-        versionCode = 7
-        versionName = "1.6"
+        versionCode = 8
+        versionName = "1.7"
 
         ndk { abiFilters += targetAbis }
         externalNativeBuild {

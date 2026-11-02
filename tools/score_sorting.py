@@ -37,6 +37,19 @@ CASES = [
     ("what if the app had a daily digest email that would be nice also remember to renew the domain before the 20th", [("idea", "digest", False), ("task", "domain", True)]),
     ("Meeting with the investor next Tuesday at 11. Prepare the deck before that.", [("task", "investor", True), ("task", "deck", False)]),
     ("I really have to stop forgetting to take my medicine every morning", [("task", "medicine", False)]),
+    # Rambling notes: repeats and background that shouldn't become items of their own.
+    ("Okay so I need to prepare the deck for the client meeting on Friday. The client wants to see the numbers from last quarter. Rahul has those numbers so I should ask him. And yeah the deck needs to be ready by Friday.", [("task", "deck", True), ("task", "rahul", False)]),
+    ("I have to call the bank tomorrow. Yeah, call the bank tomorrow about the loan. It's about the home loan. The bank closes at five so I have to call before five.", [("task", "bank", True)]),
+    ("So the thing is the car is making a weird noise. I think I should take it to the service centre this weekend. Last time they charged me a lot. Maybe I should try the other garage near the office.", [("task", "service centre", True), ("idea", "garage", False)]),
+    ("Buy milk. Buy milk and eggs. Also get some bread.", [("task", "milk", False), ("task", "bread", False)]),
+    ("I need to send the invoice to Priya, I need to send Priya the invoice by tomorrow, and I keep forgetting it.", [("task", "invoice", True)]),
+    ("I need to pay the electricity bill. The electricity bill is due on the 10th. Pay it before the 10th otherwise they charge a late fee.", [("task", "electricity", True)]),
+    ("Need to book tickets for Delhi. Book the flight tickets for next Monday. Actually check the train first, train might be cheaper. Then book whichever is cheaper.", [("task", "tickets", True), ("task", "train", False)]),
+    ("Remind me to talk to Vivek about the pricing page. We discussed it last week and he had some concerns. I should talk to him before the launch. The launch is on the 20th.", [("task", "vivek", True)]),
+    ("Doctor's appointment on Thursday at 4. I have to carry the old reports. The reports are in the blue file. Don't forget to carry the blue file.", [("task", "appointment", True), ("task", "reports", False)]),
+    ("I have to finish the proposal today. The proposal for Careers360. Finish it today and send it to Ankit. Ankit will review it and then we can send it to the client.", [("task", "finish", True), ("task", "ankit", True)]),
+    ("Okay I want to start going to the gym again. I should go to the gym three times a week. Start from Monday. Also need to buy new shoes for the gym.", [("task", "gym", True), ("task", "shoes", False)]),
+    ("Get the AC serviced. It is not cooling properly. Call the service guy. His number is in my phone. Tell him to come on Saturday.", [("task", "serviced", False), ("task", "service guy", False), ("task", "tell him", True)]),
 ]
 TUNED = len(CASES)
 # Fresh notes, written after the prompt was final, so they show accuracy on things it wasn't adjusted for.
@@ -53,6 +66,14 @@ CASES += [
     ("call plumber today fix the kitchen tap and check if the water bill is paid", [("task", "plumber", True), ("task", "water bill", False)]),
     ("It would be great if the dashboard showed weekly trends.", [("idea", "dashboard", False)]),
     ("By end of the month I have to file the GST return, and I should renew the gym membership sometime.", [("task", "gst", True), ("task", "gym", False)]),
+    ("So tomorrow I have to go to the RTO for the licence renewal. The licence expires next month. I need to carry the Aadhaar and two photos. Also remember to get the photos clicked today.", [("task", "rto", True), ("task", "aadhaar", False), ("task", "clicked", True)]),
+    ("I need to reply to Meera's email about the contract. She has been waiting since Monday. Reply to her today. It's important.", [("task", "meera", True)]),
+    ("Order the birthday cake for Sunday. Riya likes chocolate. Order it from the place near her office. And I also need to buy candles.", [("task", "cake", True), ("task", "candles", False)]),
+    ("What if we had a referral page on the site. People keep asking for it. Anyway I have to fix the login bug today, the login bug is blocking Sam. Fix the login bug first.", [("idea", "referral", False), ("task", "login", True)]),
+    ("Pay the school fees by the 7th. The fees are ninety thousand this term. I should transfer the money to the savings account first, the savings account is low.", [("task", "school fees", True), ("task", "transfer", False)]),
+    ("I keep forgetting to water the plants. Water the plants this evening. The balcony ones are dying.", [("task", "water the plants", True)]),
+    ("Call Neha tomorrow about the flat. Call Neha at 11. The broker said the owner wants an answer by Friday.", [("task", "neha", True)]),
+    ("Need to prepare for the interview on Wednesday. Go through the case studies. The interview is with the head of product. Also update the resume and send it to Karan.", [("task", "interview", True), ("task", "case studies", False), ("task", "resume", False)]),
 ]
 
 
@@ -85,13 +106,14 @@ rows = [json.loads(line) for line in pathlib.Path(sys.argv[2]).read_text(encodin
 expected_by_note = dict(CASES)
 fresh_notes = {note for note, _ in CASES[TUNED:]}
 lines = []
-total_right = total_expected = fresh_right = fresh_expected = 0
+total_right = total_expected = fresh_right = fresh_expected = extra_items = 0
 times = []
 for row in rows:
     if "note" not in row:
         continue
     expected = expected_by_note[row["note"]]
     right, notes = score(row["items"], expected)
+    extra_items += max(0, len(row["items"]) - len(expected))
     total_right += right
     total_expected += len(expected)
     if row["note"] in fresh_notes:
@@ -106,6 +128,6 @@ load = next((r["loadMs"] for r in rows if "loadMs" in r), "?")
 done = any(r.get("done") for r in rows)
 times.sort()
 median = times[len(times) // 2] / 1000 if times else 0
-lines.insert(0, f"SCORE {total_right}/{total_expected} over {len(times)} notes (fresh notes: {fresh_right}/{fresh_expected}), load {load} ms, median {median:.1f} s per note on emulator, finished={done}")
+lines.insert(0, f"SCORE {total_right}/{total_expected} over {len(times)} notes (fresh notes: {fresh_right}/{fresh_expected}), {extra_items} extra items, load {load} ms, median {median:.1f} s per note on emulator, finished={done}")
 pathlib.Path(sys.argv[3]).write_text("\n".join(lines), encoding="utf-8")
 print(lines[0])
