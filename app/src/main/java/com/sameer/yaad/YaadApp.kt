@@ -8,8 +8,10 @@ import com.sameer.yaad.capture.NoteProcessor
 import com.sameer.yaad.capture.NoteSorter
 import com.sameer.yaad.capture.WavFile
 import com.sameer.yaad.capture.WhisperEngine
+import com.sameer.yaad.data.MIGRATION_1_2
 import com.sameer.yaad.data.YaadDatabase
 import com.sameer.yaad.data.YaadRepository
+import com.sameer.yaad.dedupe.DuplicateWorker
 import com.sameer.yaad.log.VoiceLog
 import com.sameer.yaad.parse.NoteParser
 import com.sameer.yaad.remind.LockScreenMic
@@ -28,6 +30,7 @@ class YaadApp : Application() {
         Room.databaseBuilder(this, YaadDatabase::class.java, "yaad.db")
             // Lets the screens in one process see what analysis writes from the other.
             .enableMultiInstanceInvalidation()
+            .addMigrations(MIGRATION_1_2)
             .build()
     }
     val reminders by lazy { ReminderEngine(this, database.items()) }
@@ -62,6 +65,7 @@ class YaadApp : Application() {
             reminders.sync()
             repository.recoverCutOffRecordings(processStart) { WavFile.durationMs(it) }
             if (repository.hasUnfinishedNotes()) AnalysisWorker.schedule(this@YaadApp)
+            if (repository.hasItemsToCheckForDuplicates()) DuplicateWorker.schedule(this@YaadApp)
         }
     }
 }

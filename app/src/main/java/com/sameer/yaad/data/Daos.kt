@@ -62,4 +62,14 @@ interface ItemDao {
 
     @Query("UPDATE items SET lastNotifiedAt = :at WHERE id = :id")
     suspend fun markNotified(id: Long, at: Long)
+
+    @Query("SELECT * FROM items WHERE bucket IN ('TODO', 'IN_PROGRESS')")
+    suspend fun open(): List<ItemEntity>
+
+    @Query("SELECT EXISTS(SELECT 1 FROM items WHERE duplicateCheckedAt IS NULL)")
+    suspend fun hasUncheckedForDuplicates(): Boolean
+
+    // Saying something again after finishing it is new work, so finished items are never compared.
+    @Query("UPDATE items SET duplicateCheckedAt = :at WHERE duplicateCheckedAt IS NULL AND bucket IN ('COMPLETED', 'DISCARDED')")
+    suspend fun markFinishedAsChecked(at: Long)
 }

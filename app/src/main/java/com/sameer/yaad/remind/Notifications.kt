@@ -22,6 +22,7 @@ import java.time.LocalDate
 object Notifications {
     const val FOREGROUND_ID = 1
     private const val LOCK_SCREEN_MIC_ID = 2
+    private const val DUPLICATES_ID = 3
     private const val DEADLINE_ID_BASE = 10_000
     private const val NOTE_RESULT_ID_BASE = 1_000_000
 
@@ -146,6 +147,21 @@ object Notifications {
             .setContentIntent(openApp(context))
             .build()
         manager(context).notify(noteResultId(noteId), notification)
+    }
+
+    /** Says what went where, so a wrong call gets noticed and can be restored. */
+    fun showDuplicatesRemoved(context: Context, removed: List<ItemEntity>) {
+        if (!canPost(context)) return
+        val titles = removed.joinToString("\n") { it.title }
+        val notification = NotificationCompat.Builder(context, CHANNEL_RESULTS)
+            .setSmallIcon(R.drawable.ic_check)
+            .setContentTitle("Moved ${plural(removed.size, "duplicate")} to Discarded")
+            .setContentText(titles)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(titles))
+            .setAutoCancel(true)
+            .setContentIntent(openApp(context))
+            .build()
+        manager(context).notify(DUPLICATES_ID, notification)
     }
 
     fun showCaptureFailed(context: Context, noteId: Long) {

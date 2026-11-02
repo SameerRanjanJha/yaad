@@ -18,6 +18,7 @@ import androidx.work.OutOfQuotaPolicy
 import androidx.work.WorkManager
 import androidx.work.WorkRequest
 import androidx.work.WorkerParameters
+import com.sameer.yaad.dedupe.DuplicateWorker
 import com.sameer.yaad.yaad
 import java.util.concurrent.TimeUnit
 import kotlin.coroutines.resume
@@ -60,7 +61,10 @@ class AnalysisService : Service() {
 class AnalysisWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
 
     override suspend fun doWork(): Result = when {
-        analyseInOtherProcess() -> Result.success()
+        analyseInOtherProcess() -> {
+            DuplicateWorker.schedule(applicationContext)
+            Result.success()
+        }
         runAttemptCount < MAX_RETRIES -> Result.retry()
         else -> Result.failure()
     }

@@ -60,6 +60,8 @@ data class ItemEntity(
     val updatedAt: Long,
     val completedAt: Long? = null,
     val lastNotifiedAt: Long? = null,
+    val duplicateCheckedAt: Long? = null,
+    val duplicateOfId: Long? = null,
 )
 
 val ItemEntity.deadline: Deadline?

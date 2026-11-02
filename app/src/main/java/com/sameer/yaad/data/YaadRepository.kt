@@ -1,6 +1,7 @@
 package com.sameer.yaad.data
 
 import androidx.room.withTransaction
+import com.sameer.yaad.dedupe.DuplicateRemover
 import com.sameer.yaad.parse.Deadline
 import com.sameer.yaad.parse.ItemKind
 import com.sameer.yaad.parse.ParsedItem
@@ -108,9 +109,24 @@ class YaadRepository(
                 bucket = bucket,
                 updatedAt = now,
                 completedAt = if (bucket == Bucket.COMPLETED) now else null,
+                duplicateOfId = null,
             ),
         )
         onItemsChanged()
+    }
+
+    suspend fun hasItemsToCheckForDuplicates(): Boolean = items.hasUncheckedForDuplicates()
+
+    /** Returns the copies it took off the list. */
+    suspend fun removeDuplicates(now: Long): List<ItemEntity> {
+        val removed = db.withTransaction {
+            val pass = DuplicateRemover.run(items.open(), now)
+            pass.changed.forEach { items.update(it) }
+            items.markFinishedAsChecked(now)
+            pass.removed
+        }
+        if (removed.isNotEmpty()) onItemsChanged()
+        return removed
     }
 
     suspend fun saveEdits(id: Long, title: String, detail: String?, kind: ItemKind, bucket: Bucket, deadline: Deadline?, now: Long) {
@@ -125,6 +141,7 @@ class YaadRepository(
             completedAt = if (bucket == Bucket.COMPLETED) item.completedAt ?: now else null,
             deadlineSetAt = if (deadlineChanged) now else item.deadlineSetAt,
             lastNotifiedAt = if (deadlineChanged) null else item.lastNotifiedAt,
+            duplicateOfId = if (bucket == item.bucket) item.duplicateOfId else null,
         )
         items.update(edited)
         onItemsChanged()
