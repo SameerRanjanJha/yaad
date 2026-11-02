@@ -13,12 +13,20 @@ import com.sameer.yaad.yaad
 /**
  * The step after recording and analysis. It's a job of its own, so a delay here never holds up the
  * next note. It loads no models and only touches the database, so it runs in the main process.
+ *
+ * Its first run also tidies the items already on the list, since those were sorted before each note was tidied.
  */
 class DuplicateWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
 
     override suspend fun doWork(): Result {
-        val removed = applicationContext.yaad.repository.removeDuplicates(System.currentTimeMillis())
-        if (removed.isNotEmpty()) Notifications.showDuplicatesRemoved(applicationContext, removed)
+        val app = applicationContext.yaad
+        val now = System.currentTimeMillis()
+        val tidied = if (app.prefs.listTidied) emptyList() else app.repository.tidyList(now).also { app.prefs.listTidied = true }
+        val removed = app.repository.removeDuplicates(now)
+        when {
+            tidied.isNotEmpty() -> Notifications.showListTidied(applicationContext, tidied + removed)
+            removed.isNotEmpty() -> Notifications.showDuplicatesRemoved(applicationContext, removed)
+        }
         return Result.success()
     }
 

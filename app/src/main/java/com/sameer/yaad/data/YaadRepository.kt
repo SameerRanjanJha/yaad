@@ -2,6 +2,7 @@ package com.sameer.yaad.data
 
 import androidx.room.withTransaction
 import com.sameer.yaad.dedupe.DuplicateRemover
+import com.sameer.yaad.dedupe.ListTidier
 import com.sameer.yaad.parse.Deadline
 import com.sameer.yaad.parse.ItemKind
 import com.sameer.yaad.parse.ParsedItem
@@ -116,6 +117,17 @@ class YaadRepository(
     }
 
     suspend fun hasItemsToCheckForDuplicates(): Boolean = items.hasUncheckedForDuplicates()
+
+    /** Returns the items it folded into others. */
+    suspend fun tidyList(now: Long): List<ItemEntity> {
+        val removed = db.withTransaction {
+            val pass = ListTidier.run(items.all(), now)
+            pass.changed.forEach { items.update(it) }
+            pass.removed
+        }
+        if (removed.isNotEmpty()) onItemsChanged()
+        return removed
+    }
 
     /** Returns the copies it took off the list. */
     suspend fun removeDuplicates(now: Long): List<ItemEntity> {

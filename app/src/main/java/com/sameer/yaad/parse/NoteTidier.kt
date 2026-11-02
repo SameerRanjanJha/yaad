@@ -9,24 +9,32 @@ package com.sameer.yaad.parse
  * merged item added moves to the detail of the one that stays, and the full note stays in the log.
  */
 internal object NoteTidier {
+    /** An item left after tidying, and the positions in the input of every item folded into it, its own first. */
+    class Group(val item: ParsedItem, val sources: List<Int>)
+
     /** [background] is what the speaker said that isn't an item, kept as detail on the closest item. */
-    fun tidy(items: List<ParsedItem>, background: List<ParsedItem> = emptyList()): List<ParsedItem> {
-        val tidied = attachStatements(mergeRepeats(items)).toMutableList()
+    fun tidy(items: List<ParsedItem>, background: List<ParsedItem> = emptyList()): List<ParsedItem> =
+        group(items, background).map { it.item }
+
+    fun group(items: List<ParsedItem>, background: List<ParsedItem> = emptyList()): List<Group> {
+        val tidied = attachStatements(mergeRepeats(items.mapIndexed { index, item -> Group(item, listOf(index)) })).toMutableList()
         for (sentence in background) {
-            val target = closestItem(sentence, tidied) ?: tidied.lastIndex.takeIf { it >= 0 } ?: continue
-            tidied[target] = absorb(tidied[target], sentence)
+            val target = closestItem(sentence, tidied.map { it.item }) ?: tidied.lastIndex.takeIf { it >= 0 } ?: continue
+            tidied[target] = Group(absorb(tidied[target].item, sentence), tidied[target].sources)
         }
         return tidied
     }
 
-    private fun mergeRepeats(items: List<ParsedItem>): List<ParsedItem> {
-        val kept = mutableListOf<ParsedItem>()
-        for (item in items) {
-            val match = kept.indexOfFirst { isRepeat(it, item) }
-            if (match < 0) kept += item else kept[match] = merge(kept[match], item)
+    private fun mergeRepeats(groups: List<Group>): List<Group> {
+        val kept = mutableListOf<Group>()
+        for (group in groups) {
+            val match = kept.indexOfFirst { isRepeat(it.item, group.item) }
+            if (match < 0) kept += group else kept[match] = combine(kept[match], group, merge(kept[match].item, group.item))
         }
         return kept
     }
+
+    private fun combine(kept: Group, other: Group, item: ParsedItem) = Group(item, kept.sources + other.sources)
 
     private fun isRepeat(older: ParsedItem, newer: ParsedItem): Boolean {
         val olderWords = TitleWords.of(older.title)
@@ -70,13 +78,13 @@ internal object NoteTidier {
         return item.copy(kind = if (isTask) ItemKind.TASK else ItemKind.IDEA, detail = detail, deadline = deadline)
     }
 
-    private fun attachStatements(items: List<ParsedItem>): List<ParsedItem> {
-        val result = items.toMutableList()
-        val actions = items.indices.filterNot { isStatement(items[it]) }
+    private fun attachStatements(groups: List<Group>): List<Group> {
+        val result = groups.toMutableList()
+        val actions = groups.indices.filterNot { isStatement(groups[it].item) }
         val attached = mutableSetOf<Int>()
-        for (index in items.indices - actions.toSet()) {
-            val target = targetFor(index, result, actions) ?: continue
-            result[target] = absorb(result[target], items[index])
+        for (index in groups.indices - actions.toSet()) {
+            val target = targetFor(index, result.map { it.item }, actions) ?: continue
+            result[target] = combine(result[target], groups[index], absorb(result[target].item, groups[index].item))
             attached += index
         }
         return result.filterIndexed { index, _ -> index !in attached }

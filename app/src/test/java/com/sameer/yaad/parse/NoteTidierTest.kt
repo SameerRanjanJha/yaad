@@ -167,6 +167,11 @@ class NoteTidierTest {
         assertEquals(listOf("The car is making a weird noise"), titles(idea("The car is making a weird noise")))
     }
 
+    @Test fun `each item says which items were folded into it`() {
+        val groups = NoteTidier.group(listOf(task("Get the AC serviced"), task("Call the service guy"), idea("His number is in my phone"), task("Get the AC serviced")))
+        assertEquals(listOf(listOf(0, 3), listOf(1, 2)), groups.map { it.sources })
+    }
+
     @Test fun `nothing to tidy changes nothing`() {
         val items = listOf(task("Call the bank", thursday), idea("Add a dark mode"))
         assertEquals(items, NoteTidier.tidy(items))

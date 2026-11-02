@@ -65,7 +65,7 @@ class YaadApp : Application() {
             reminders.sync()
             repository.recoverCutOffRecordings(processStart) { WavFile.durationMs(it) }
             if (repository.hasUnfinishedNotes()) AnalysisWorker.schedule(this@YaadApp)
-            if (repository.hasItemsToCheckForDuplicates()) DuplicateWorker.schedule(this@YaadApp)
+            if (!prefs.listTidied || repository.hasItemsToCheckForDuplicates()) DuplicateWorker.schedule(this@YaadApp)
         }
     }
 }

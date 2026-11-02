@@ -69,6 +69,9 @@ interface ItemDao {
     @Query("SELECT * FROM items WHERE bucket IN ('TODO', 'IN_PROGRESS')")
     suspend fun open(): List<ItemEntity>
 
+    @Query("SELECT * FROM items")
+    suspend fun all(): List<ItemEntity>
+
     @Query("SELECT EXISTS(SELECT 1 FROM items WHERE duplicateCheckedAt IS NULL)")
     suspend fun hasUncheckedForDuplicates(): Boolean
 

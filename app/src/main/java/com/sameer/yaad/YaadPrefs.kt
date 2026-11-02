@@ -34,6 +34,11 @@ class YaadPrefs(private val context: Context) {
         get() = prefs.getString("log_document_uri", null)
         set(value) = prefs.edit { putString("log_document_uri", value) }
 
+    /** Items sorted before notes were tidied get tidied once. */
+    var listTidied: Boolean
+        get() = prefs.getBoolean("list_tidied", false)
+        set(value) = prefs.edit { putBoolean("list_tidied", value) }
+
     var lastCheckIn: LocalDate?
         get() = prefs.getString("last_check_in", null)?.let(LocalDate::parse)
         set(value) = prefs.edit { putString("last_check_in", value?.toString()) }

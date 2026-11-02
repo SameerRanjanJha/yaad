@@ -179,7 +179,7 @@ private fun ItemRow(item: ItemEntity, onOpen: () -> Unit, onMove: (Bucket) -> Un
             DeadlineLabel(item, finished)
             if (item.duplicateOfId != null) {
                 Text(
-                    "Removed as a duplicate",
+                    "Merged into another item",
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

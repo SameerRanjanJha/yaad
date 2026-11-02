@@ -173,13 +173,19 @@ object Notifications {
         manager(context).notify(noteResultId(noteId), notification)
     }
 
+    fun showDuplicatesRemoved(context: Context, removed: List<ItemEntity>) =
+        showMovedToDiscarded(context, "Moved ${plural(removed.size, "duplicate")} to Discarded", removed)
+
+    fun showListTidied(context: Context, removed: List<ItemEntity>) =
+        showMovedToDiscarded(context, "Tidied your list: merged ${plural(removed.size, "item")} into others", removed)
+
     /** Says what went where, so a wrong call gets noticed and can be restored. */
-    fun showDuplicatesRemoved(context: Context, removed: List<ItemEntity>) {
+    private fun showMovedToDiscarded(context: Context, title: String, removed: List<ItemEntity>) {
         if (!canPost(context)) return
         val titles = removed.joinToString("\n") { it.title }
         val notification = NotificationCompat.Builder(context, CHANNEL_RESULTS)
             .setSmallIcon(R.drawable.ic_check)
-            .setContentTitle("Moved ${plural(removed.size, "duplicate")} to Discarded")
+            .setContentTitle(title)
             .setContentText(titles)
             .setStyle(NotificationCompat.BigTextStyle().bigText(titles))
             .setAutoCancel(true)

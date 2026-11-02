@@ -40,7 +40,7 @@ DuplicateWorker (WorkManager)
 - Waiting notes survive crashes and reboots, and finish without the app being opened.
 - Notifications use one exact alarm, set for whatever is due next. It's worked out again from the database after every change, reboot and clock change, so anything missed while the phone was off shows up once it's back on.
 - The model decides what the items are and what kind they are. Dates are worked out by tested rules from words it has to quote from the note, a date said about a different item is ignored, items it invents are dropped, and tasks it misses that the rules caught are added back. If it fails, the rules sort the note instead. If it crashes the app, AI sorting turns itself off.
-- Small models make an item of almost every sentence, so each note is tidied afterwards. A repeat merges into the first mention, and a sentence that only says something about a task ("it's not cooling properly") moves to that task's details. It goes further than the check across notes because things said in one breath are usually about the same thing, and whatever a merged item added stays in the details.
+- Small models make an item of almost every sentence, so each note is tidied afterwards. A repeat merges into the first mention, and a sentence that only says something about a task ("it's not cooling properly") moves to that task's details. It goes further than the check across notes because things said in one breath are usually about the same thing, and whatever a merged item added stays in the details. Items sorted before tidying existed are tidied the same way once, note by note, leaving anything you've edited, started or finished. What merges goes to Discarded, where you can restore it.
 - Duplicate removal uses plain rules and no model, and it leaves anything uncertain on the list, because a leftover duplicate costs far less than a lost task. It ignores small words, word order and word endings, and knows a few everyday equivalents such as "ring" and "call" or "mom" and "mother". Items with different deadlines stay separate, since "pay rent" for two different dates is two tasks. Completed and discarded items are never compared, and each item is checked once, so one you restore stays on the list.
 
 ## Building
@@ -95,7 +95,7 @@ For the emulator, build with `-Pyaad.abis=x86_64`. Debug builds read `test-audio
 - Recording and transcription have run on a OnePlus Nord 5. AI sorting, crash recovery, reboot recovery, duplicate removal and notifications have been tested on an Android 15 emulator.
 - Sorting is built for English. The Hindi + English mode is untested.
 - Merging within a note and duplicate removal only catch repeats worded alike, so "prepare the client slides" and "make the client deck" stay as two items. Both are also built for English.
-- Tidying only changes new notes, so items already on the list stay as they are.
+- The one-time tidy of an existing list only sees each item's title, date and details, not the note it came from, so it catches less than tidying a new note.
 - Phones can delay background work to save battery, and a delayed note delays its reminders.
 - Setting the phone's date back by several days can hold up notes already in the queue for about that long, because of how Android schedules background jobs.
 - Android doesn't offer third-party lock-screen widgets on most phones, so the lock-screen mic is a permanent notification.
