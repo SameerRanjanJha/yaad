@@ -37,25 +37,23 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
         </activity>
 
-        <!-- Also a launcher entry, so phones that let any app sit on the lock screen or a hardware key can use it. -->
+        <!-- Not in the app list, so there's one Yaad icon. The widget, lock-screen notification, tile and the icon's long-press menu open it. -->
         <activity
             android:name=".capture.CaptureActivity"
             android:excludeFromRecents="true"
-            android:exported="true"
+            android:exported="false"
             android:label="@string/capture_label"
             android:launchMode="singleInstance"
             android:screenOrientation="portrait"
             android:showWhenLocked="true"
             android:taskAffinity="com.sameer.yaad.capture"
             android:theme="@style/Theme.Yaad.Capture"
-            android:turnScreenOn="true">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-        </activity>
+            android:turnScreenOn="true" />
 
         <service
             android:name=".capture.CaptureService"

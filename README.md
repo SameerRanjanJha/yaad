@@ -6,7 +6,7 @@ Speech recognition and sorting both run on the device. The app has no internet p
 
 ## What it does
 
-- **One-tap capture** from a home-screen widget, a lock-screen notification or a Quick Settings tile, without unlocking.
+- **One-tap capture** from a home-screen widget, a lock-screen notification or a Quick Settings tile, without unlocking. Long-pressing the app icon offers "Record a note" too.
 - **Sorts what you said.** "Call the bank tomorrow, and I have an idea, we could add a dark mode" becomes a task due tomorrow and a separate idea.
 - **Buckets** for tasks and ideas: To do, In progress, Completed and Discarded.
 - **One item per thing to do.** Ramble as much as you like: repeats within a note merge, and reasons and background become the task's details rather than items of their own.

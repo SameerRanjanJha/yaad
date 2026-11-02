@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Long-press the Yaad icon to record straight away. It can be dragged out onto the home screen. -->
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:icon="@mipmap/ic_launcher"
+        android:shortcutId="record"
+        android:shortcutShortLabel="@string/shortcut_record">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetClass="com.sameer.yaad.capture.CaptureActivity"
+            android:targetPackage="com.sameer.yaad" />
+    </shortcut>
+</shortcuts>

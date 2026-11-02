@@ -4,4 +4,5 @@
     <string name="capture_label">Yaad Mic</string>
     <string name="widget_description">One tap to record a voice note</string>
     <string name="tile_label">Voice note</string>
+    <string name="shortcut_record">Record a note</string>
 </resources>
