@@ -4,5 +4,8 @@
         <activity
             android:name=".capture.AiEvalActivity"
             android:exported="true" />
+        <activity
+            android:name=".capture.SpeechEvalActivity"
+            android:exported="true" />
     </application>
 </manifest>

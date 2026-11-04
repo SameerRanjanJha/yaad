@@ -25,6 +25,20 @@ class NoteSorter(
 
     fun sort(transcript: String, capturedAt: LocalDateTime, allowAi: Boolean): List<ParsedItem> {
         if (!allowAi || !aiEnabled()) return rules.parse(transcript, capturedAt)
+        return sortWithModel(transcript, capturedAt) ?: rules.parse(transcript, capturedAt)
+    }
+
+    /**
+     * For reading an old note again. Null when the model can't run, so the old reading stays
+     * instead of being replaced by a weaker one from the rules.
+     */
+    fun sortAgain(transcript: String, capturedAt: LocalDateTime, allowAi: Boolean): List<ParsedItem>? = when {
+        !aiEnabled() -> rules.parse(transcript, capturedAt)
+        allowAi -> sortWithModel(transcript, capturedAt)
+        else -> null
+    }
+
+    private fun sortWithModel(transcript: String, capturedAt: LocalDateTime): List<ParsedItem>? {
         Log.i(TAG, "Sorting with the model")
         return try {
             openModel().use { engine ->
@@ -35,8 +49,8 @@ class NoteSorter(
                 ).parse(transcript, capturedAt)
             }
         } catch (error: Exception) {
-            Log.w(TAG, "Sorting with rules instead", error)
-            rules.parse(transcript, capturedAt)
+            Log.w(TAG, "The model failed to sort", error)
+            null
         }
     }
 

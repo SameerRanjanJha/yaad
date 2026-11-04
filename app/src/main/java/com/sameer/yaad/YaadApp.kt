@@ -9,6 +9,7 @@ import com.sameer.yaad.capture.NoteSorter
 import com.sameer.yaad.capture.WavFile
 import com.sameer.yaad.capture.WhisperEngine
 import com.sameer.yaad.data.MIGRATION_1_2
+import com.sameer.yaad.data.MIGRATION_2_3
 import com.sameer.yaad.data.YaadDatabase
 import com.sameer.yaad.data.YaadRepository
 import com.sameer.yaad.dedupe.DuplicateWorker
@@ -17,6 +18,7 @@ import com.sameer.yaad.parse.NoteParser
 import com.sameer.yaad.remind.LockScreenMic
 import com.sameer.yaad.remind.Notifications
 import com.sameer.yaad.remind.ReminderEngine
+import java.io.File
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -30,7 +32,7 @@ class YaadApp : Application() {
         Room.databaseBuilder(this, YaadDatabase::class.java, "yaad.db")
             // Lets the screens in one process see what analysis writes from the other.
             .enableMultiInstanceInvalidation()
-            .addMigrations(MIGRATION_1_2)
+            .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
             .build()
     }
     val reminders by lazy { ReminderEngine(this, database.items(), prefs) }
@@ -47,7 +49,7 @@ class YaadApp : Application() {
                 aiEnabled = { prefs.aiSorting },
                 disableAi = { prefs.aiSorting = false },
             ),
-            engineFactory = { WhisperEngine(assets) },
+            engineFactory = { WhisperEngine(assets, WhisperEngine.speechDetectorFile(assets, noBackupFilesDir)) },
             speechMode = { prefs.speechMode },
         )
     }
@@ -64,9 +66,17 @@ class YaadApp : Application() {
         scope.launch {
             reminders.sync()
             repository.recoverCutOffRecordings(processStart) { WavFile.durationMs(it) }
+            readOldNotesAgain()
             if (repository.hasUnfinishedNotes()) AnalysisWorker.schedule(this@YaadApp)
             if (!prefs.listTidied || repository.hasItemsToCheckForDuplicates()) DuplicateWorker.schedule(this@YaadApp)
         }
+    }
+
+    /** After an update that improves speech or sorting, old notes whose recording is still kept are read again. */
+    private suspend fun readOldNotesAgain() {
+        if (prefs.notesReadWith >= NoteProcessor.CURRENT_READING) return
+        repository.queueRereading { note -> note.audioPath?.let { File(it).exists() } == true }
+        prefs.notesReadWith = NoteProcessor.CURRENT_READING
     }
 }
 

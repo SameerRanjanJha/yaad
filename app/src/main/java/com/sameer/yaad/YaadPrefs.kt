@@ -39,6 +39,11 @@ class YaadPrefs(private val context: Context) {
         get() = prefs.getBoolean("list_tidied", false)
         set(value) = prefs.edit { putBoolean("list_tidied", value) }
 
+    /** Which version of the speech model and sorter the notes on the list were read with. */
+    var notesReadWith: Int
+        get() = prefs.getInt("notes_read_with", 1)
+        set(value) = prefs.edit { putInt("notes_read_with", value) }
+
     var lastCheckIn: LocalDate?
         get() = prefs.getString("last_check_in", null)?.let(LocalDate::parse)
         set(value) = prefs.edit { putString("last_check_in", value?.toString()) }

@@ -87,7 +87,12 @@ private fun NoteRow(note: NoteEntity) {
         when (note.state) {
             NoteState.DONE -> Text(note.transcript.orEmpty(), style = MaterialTheme.typography.bodyMedium)
             NoteState.RECORDING -> StatusText("Recording…")
-            NoteState.PENDING, NoteState.TRANSCRIBING -> StatusText("Writing this down…")
+            NoteState.PENDING, NoteState.TRANSCRIBING -> if (note.reread) {
+                Text(note.transcript.orEmpty(), style = MaterialTheme.typography.bodyMedium)
+                StatusText("Reading this again…")
+            } else {
+                StatusText("Writing this down…")
+            }
             NoteState.EMPTY -> StatusText("No speech detected. The audio is kept.")
             NoteState.FAILED -> Text(
                 "Couldn't write this down: ${note.error.orEmpty()}",

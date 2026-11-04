@@ -87,4 +87,52 @@ class CaptureAudioTest {
         assertFalse(SpeechGate.hasSpeech(FloatArray(SAMPLE_RATE) { if (it < 200) 0.5f else 0f }))
         assertTrue(SpeechGate.hasSpeech(FloatArray(SAMPLE_RATE) { 0.05f }))
     }
+
+    @Test fun `the rumble filter takes out hum and keeps the voice range`() {
+        fun tone(hz: Double) = FloatArray(SAMPLE_RATE) { kotlin.math.sin(2 * kotlin.math.PI * hz * it / SAMPLE_RATE).toFloat() }
+        fun level(samples: FloatArray) = rms(ShortArray(samples.size) { (samples[it] * 32767).toInt().toShort() }.copyOfRange(SAMPLE_RATE / 2, SAMPLE_RATE), SAMPLE_RATE / 2)
+        assertTrue(level(RumbleFilter.apply(tone(50.0))) < level(tone(50.0)) * 0.3f)
+        assertTrue(level(RumbleFilter.apply(tone(1000.0))) > level(tone(1000.0)) * 0.98f)
+    }
+
+    private fun voice(seconds: Double, level: Float) = FloatArray((seconds * SAMPLE_RATE).toInt()) { if (it % 2 == 0) level else -level }
+
+    private fun FloatArray.countAt(level: Float) = count { kotlin.math.abs(it) == level }
+
+    @Test fun `someone talking far quieter than the speaker is dropped`() {
+        val audio = voice(2.0, 0.3f) + voice(1.0, 0f) + voice(2.0, 0.02f)
+        val kept = ForegroundSpeech.keep(audio, floatArrayOf(0f, 2f, 3f, 5f))!!
+        assertEquals(2 * SAMPLE_RATE, kept.countAt(0.3f))
+        assertEquals(0, kept.countAt(0.02f))
+    }
+
+    @Test fun `background talk straight after the speaker stops is cut off`() {
+        val audio = voice(2.0, 0.3f) + voice(3.0, 0.02f)
+        val kept = ForegroundSpeech.keep(audio, floatArrayOf(0f, 5f))!!
+        assertEquals(2 * SAMPLE_RATE, kept.countAt(0.3f))
+        assertTrue(kept.countAt(0.02f) <= SAMPLE_RATE / 2)
+    }
+
+    @Test fun `the speaker's own quieter sentences are kept`() {
+        val audio = voice(2.0, 0.3f) + voice(2.0, 0.1f)
+        val kept = ForegroundSpeech.keep(audio, floatArrayOf(0f, 4f))!!
+        assertEquals(2 * SAMPLE_RATE, kept.countAt(0.1f))
+    }
+
+    @Test fun `a short loud sound doesn't set the speaker's level`() {
+        val audio = voice(0.3, 0.9f) + voice(2.0, 0.1f)
+        val kept = ForegroundSpeech.keep(audio, floatArrayOf(0f, 2.3f))!!
+        assertEquals(2 * SAMPLE_RATE, kept.countAt(0.1f))
+    }
+
+    @Test fun `noise outside the stretches of speech is dropped and the end is padded with silence`() {
+        val audio = voice(1.0, 0.05f) + voice(2.0, 0.3f) + voice(1.0, 0.05f)
+        val kept = ForegroundSpeech.keep(audio, floatArrayOf(1f, 3f))!!
+        assertTrue(kept.countAt(0.05f) <= SAMPLE_RATE)
+        assertTrue(kept.takeLast(3 * SAMPLE_RATE).all { it == 0f })
+    }
+
+    @Test fun `no speech found gives nothing to keep`() {
+        assertEquals(null, ForegroundSpeech.keep(voice(1.0, 0.1f), FloatArray(0)))
+    }
 }

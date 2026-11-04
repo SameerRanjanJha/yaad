@@ -58,6 +58,15 @@ Java_com_sameer_yaad_capture_WhisperNative_load(JNIEnv *env, jobject, jobject as
     return reinterpret_cast<jlong>(whisper_init_with_params(&loader, contextParams));
 }
 
+/** For the debug speech test, which tries model files that aren't in the APK. */
+extern "C" JNIEXPORT jlong JNICALL
+Java_com_sameer_yaad_capture_WhisperNative_loadFile(JNIEnv *env, jobject, jstring modelPath) {
+    JavaString path(env, modelPath);
+    whisper_context_params contextParams = whisper_context_default_params();
+    contextParams.use_gpu = false;
+    return reinterpret_cast<jlong>(whisper_init_from_file_with_params(path.get(), contextParams));
+}
+
 extern "C" JNIEXPORT void JNICALL
 Java_com_sameer_yaad_capture_WhisperNative_free(JNIEnv *, jobject, jlong handle) {
     whisper_free(reinterpret_cast<whisper_context *>(handle));
@@ -99,4 +108,44 @@ Java_com_sameer_yaad_capture_WhisperNative_transcribe(
         text += whisper_full_get_segment_text(context, i);
     }
     return env->NewStringUTF(text.c_str());
+}
+
+/**
+ * Finds the stretches of speech, anyone's, as start and end seconds one after another.
+ * Returns null if the detector can't be loaded.
+ */
+extern "C" JNIEXPORT jfloatArray JNICALL
+Java_com_sameer_yaad_capture_WhisperNative_speechStretches(
+        JNIEnv *env, jobject, jstring detectorPath, jfloatArray samples, jint threads) {
+    JavaString path(env, detectorPath);
+    whisper_vad_context_params contextParams = whisper_vad_default_context_params();
+    contextParams.n_threads = threads;
+    contextParams.use_gpu = false;
+    whisper_vad_context *detector = whisper_vad_init_from_file_with_params(path.get(), contextParams);
+    if (detector == nullptr) {
+        LOGW("Speech detector failed to load: %s", path.get());
+        return nullptr;
+    }
+    whisper_vad_params params = whisper_vad_default_params();
+    // Phrases rather than words, so each stretch is long enough to judge how loud it is.
+    params.min_silence_duration_ms = 500;
+    params.speech_pad_ms = 200;
+
+    jfloat *pcm = env->GetFloatArrayElements(samples, nullptr);
+    whisper_vad_segments *segments = whisper_vad_segments_from_samples(detector, params, pcm, env->GetArrayLength(samples));
+    env->ReleaseFloatArrayElements(samples, pcm, JNI_ABORT);
+
+    const int count = segments == nullptr ? 0 : whisper_vad_segments_n_segments(segments);
+    jfloatArray result = env->NewFloatArray(count * 2);
+    for (int i = 0; i < count; ++i) {
+        // The detector reports centiseconds.
+        const jfloat bounds[2] = {
+            whisper_vad_segments_get_segment_t0(segments, i) / 100.0f,
+            whisper_vad_segments_get_segment_t1(segments, i) / 100.0f,
+        };
+        env->SetFloatArrayRegion(result, i * 2, 2, bounds);
+    }
+    if (segments != nullptr) whisper_vad_free_segments(segments);
+    whisper_vad_free(detector);
+    return result;
 }

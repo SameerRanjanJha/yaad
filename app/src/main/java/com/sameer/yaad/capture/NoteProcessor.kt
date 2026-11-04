@@ -38,13 +38,36 @@ class NoteProcessor(
     suspend fun drain() = oneRunAtATime.withLock {
         // Holding the lock means nothing here is mid-analysis, so any note marked that way was cut off.
         repository.requeueInterruptedAnalysis(MAX_ATTEMPTS)
+        var rereadsThatChanged = 0
         while (currentCoroutineContext().isActive) {
             val note = repository.nextPendingNote() ?: break
             repository.beginTranscribing(note)
             // Once a note is started it gets finished, even if the system asks this job to stop.
-            withContext(NonCancellable) { processSafely(note) }
+            withContext(NonCancellable) {
+                if (!note.reread) processSafely(note) else if (rereadSafely(note)) rereadsThatChanged++
+            }
         }
+        if (rereadsThatChanged > 0) Notifications.showNotesReread(context, rereadsThatChanged)
         repository.pruneAudioBefore(System.currentTimeMillis() - AUDIO_RETENTION.toMillis())
+    }
+
+    /**
+     * Reads an old note again with the current models. It runs quietly, with no notification or log
+     * entry per note, and anything that goes wrong keeps the old reading. Returns whether the list changed.
+     */
+    private suspend fun rereadSafely(note: NoteEntity): Boolean = try {
+        val transcript = note.audioPath?.let(::File)?.takeIf { it.exists() }?.let { transcribeAudio(it) } ?: note.transcript
+        val items = transcript?.let { sorter.sortAgain(it, note.createdAt.toLocalDateTime(), allowAi = note.attempts < MAX_AI_ATTEMPTS) }
+        if (transcript == null || items == null) {
+            repository.keepOldReading(note.id)
+            false
+        } else {
+            repository.saveRereading(note.id, transcript, items, System.currentTimeMillis())
+        }
+    } catch (error: Exception) {
+        Log.e(TAG, "Reading note ${note.id} again failed", error)
+        repository.keepOldReading(note.id)
+        false
     }
 
     private suspend fun processSafely(note: NoteEntity) {
@@ -82,12 +105,16 @@ class NoteProcessor(
 
     /** Saves the words before sorting, so a crash while sorting doesn't mean transcribing all over again. */
     private suspend fun transcribe(note: NoteEntity): String? {
-        val samples = note.audioPath?.let(::File)?.takeIf { it.exists() }?.let(WavFile::readSamples) ?: return null
-        if (!SpeechGate.hasSpeech(samples)) return null
-        val heard = engineFactory().use { it.transcribe(samples, speechMode()) }
-        val transcript = TranscriptCleaner.clean(heard).ifEmpty { return null }
+        val transcript = note.audioPath?.let(::File)?.takeIf { it.exists() }?.let { transcribeAudio(it) } ?: return null
         repository.rememberTranscript(note.id, transcript)
         return transcript
+    }
+
+    private fun transcribeAudio(audio: File): String? {
+        val samples = WavFile.readSamples(audio)
+        if (!SpeechGate.hasSpeech(samples)) return null
+        val heard = engineFactory().use { it.transcribe(samples, speechMode()) }
+        return TranscriptCleaner.clean(heard).ifEmpty { null }
     }
 
     private suspend fun publish(note: NoteEntity, transcript: String, items: List<ParsedItem>) {
@@ -98,12 +125,15 @@ class NoteProcessor(
         Notifications.showCaptureResult(context, note.id, items)
     }
 
-    private companion object {
-        const val TAG = "YaadProcessor"
-        const val MAX_ATTEMPTS = 4
-        const val MAX_AI_ATTEMPTS = 2
-        const val ANALYSIS_PROCESS_SUFFIX = ":analysis"
-        const val RECENT_EXITS_TO_CHECK = 10
-        val AUDIO_RETENTION: Duration = Duration.ofDays(30)
+    companion object {
+        /** Raise when the speech model or the sorter improves enough that old notes should be read again. */
+        const val CURRENT_READING = 2
+
+        private const val TAG = "YaadProcessor"
+        private const val MAX_ATTEMPTS = 4
+        private const val MAX_AI_ATTEMPTS = 2
+        private const val ANALYSIS_PROCESS_SUFFIX = ":analysis"
+        private const val RECENT_EXITS_TO_CHECK = 10
+        private val AUDIO_RETENTION: Duration = Duration.ofDays(30)
     }
 }

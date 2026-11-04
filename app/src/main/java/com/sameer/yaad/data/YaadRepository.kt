@@ -18,7 +18,8 @@ class YaadRepository(
 
     fun observeItems(kind: ItemKind): Flow<List<ItemEntity>> = items.observeByKind(kind)
     fun observeNotes(): Flow<List<NoteEntity>> = notes.observeAll()
-    fun observeProcessingCount(): Flow<Int> = notes.observeProcessingCount()
+    fun observeProcessingCount(): Flow<Int> = notes.observeProcessingCount(reread = false)
+    fun observeRereadingCount(): Flow<Int> = notes.observeProcessingCount(reread = true)
 
     suspend fun note(id: Long): NoteEntity? = notes.byId(id)
     suspend fun nextPendingNote(): NoteEntity? = notes.nextPending()
@@ -88,7 +89,9 @@ class YaadRepository(
 
     suspend fun requeueInterruptedAnalysis(maxAttempts: Int) {
         for (note in notes.inAnalysis()) {
-            if (note.attempts >= maxAttempts) {
+            if (note.attempts >= maxAttempts && note.reread) {
+                keepOldReading(note.id)
+            } else if (note.attempts >= maxAttempts) {
                 markFailed(note.id, "The speech model stopped unexpectedly")
             } else {
                 notes.update(note.copy(state = NoteState.PENDING))
@@ -103,6 +106,33 @@ class YaadRepository(
         }
     }
 
+    /** Queues old notes to be read again, and returns how many. */
+    suspend fun queueRereading(canReread: (NoteEntity) -> Boolean): Int = db.withTransaction {
+        val queued = Rereading.notesToReread(notes.all(), items.all(), canReread)
+        queued.forEach { notes.update(it.copy(state = NoteState.PENDING, attempts = 0, error = null, reread = true)) }
+        queued.size
+    }
+
+    /** Returns whether the new reading changed the list. */
+    suspend fun saveRereading(noteId: Long, transcript: String, parsed: List<ParsedItem>, now: Long): Boolean {
+        val changed = db.withTransaction {
+            val note = notes.byId(noteId)?.takeIf { it.reread } ?: return@withTransaction false
+            val swap = Rereading.swap(noteId, parsed, items.all(), now)
+            notes.update(note.copy(transcript = if (swap != null) transcript else note.transcript, state = NoteState.DONE, error = null, reread = false))
+            swap?.replaced?.forEach { items.update(it) }
+            swap?.added?.let { items.insertAll(it) }
+            !swap?.added.isNullOrEmpty()
+        }
+        if (changed) onItemsChanged()
+        return changed
+    }
+
+    /** Leaves a note as it was when reading it again didn't work out. */
+    suspend fun keepOldReading(noteId: Long) {
+        val note = notes.byId(noteId) ?: return
+        notes.update(note.copy(state = NoteState.DONE, error = null, reread = false))
+    }
+
     suspend fun moveItem(id: Long, bucket: Bucket, now: Long) {
         val item = items.byId(id) ?: return
         items.update(
@@ -111,6 +141,7 @@ class YaadRepository(
                 updatedAt = now,
                 completedAt = if (bucket == Bucket.COMPLETED) now else null,
                 duplicateOfId = null,
+                replacedAt = null,
             ),
         )
         onItemsChanged()
@@ -154,18 +185,9 @@ class YaadRepository(
             deadlineSetAt = if (deadlineChanged) now else item.deadlineSetAt,
             lastNotifiedAt = if (deadlineChanged) null else item.lastNotifiedAt,
             duplicateOfId = if (bucket == item.bucket) item.duplicateOfId else null,
+            replacedAt = if (bucket == item.bucket) item.replacedAt else null,
         )
         items.update(edited)
         onItemsChanged()
     }
-
-    private fun ParsedItem.toEntity(noteId: Long, now: Long): ItemEntity = ItemEntity(
-        noteId = noteId,
-        kind = kind,
-        title = title,
-        detail = detail,
-        deadlineSetAt = now,
-        createdAt = now,
-        updatedAt = now,
-    ).withDeadline(deadline)
 }

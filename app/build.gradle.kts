@@ -26,8 +26,8 @@ android {
         // Android 12: the first version that can run a background job at once with no notification.
         minSdk = 31
         targetSdk = 35
-        versionCode = 10
-        versionName = "1.9"
+        versionCode = 11
+        versionName = "2.0"
 
         ndk { abiFilters += targetAbis }
         externalNativeBuild {
@@ -87,9 +87,13 @@ ksp {
 // The models are too big for the repository. Each is pinned to one revision and checked by hash.
 val downloadModels by tasks.registering {
     val models = mapOf(
-        "ggml-base-q5_1.bin" to Pair(
-            "https://huggingface.co/ggerganov/whisper.cpp/resolve/5359861c739e955e79d9a303bcbc70fb988958b1/ggml-base-q5_1.bin",
-            "422f1ae452ade6f30a004d7e5c6a43195e4433bc370bf23fac9cc591f01a8898",
+        "ggml-small-q5_1.bin" to Pair(
+            "https://huggingface.co/ggerganov/whisper.cpp/resolve/5359861c739e955e79d9a303bcbc70fb988958b1/ggml-small-q5_1.bin",
+            "ae85e4a935d7a567bd102fe55afc16bb595bdb618e11b2fc7591bc08120411bb",
+        ),
+        "silero-vad.bin" to Pair(
+            "https://huggingface.co/ggml-org/whisper-vad/resolve/9ffd54a1e1ee413ddf265af9913beaf518d1639b/ggml-silero-v6.2.0.bin",
+            "2aa269b785eeb53a82983a20501ddf7c1d9c48e33ab63a41391ac6c9f7fb6987",
         ),
         "sorter.gguf" to Pair(
             "https://huggingface.co/unsloth/Qwen3-0.6B-GGUF/resolve/50968a4468ef4233ed78cd7c3de230dd1d61a56b/Qwen3-0.6B-Q4_K_M.gguf",
@@ -99,6 +103,8 @@ val downloadModels by tasks.registering {
     val folder = layout.projectDirectory.dir("src/main/assets/models").asFile
     doLast {
         folder.mkdirs()
+        // A model that was swapped out would otherwise still ship in the APK.
+        folder.listFiles()?.filter { it.name !in models }?.forEach { it.delete() }
         for ((name, source) in models) {
             val (url, expectedHash) = source
             val target = folder.resolve(name)

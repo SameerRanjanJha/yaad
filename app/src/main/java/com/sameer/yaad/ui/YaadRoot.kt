@@ -57,6 +57,7 @@ fun YaadRoot(onRecord: () -> Unit) {
 
     val snackbar = remember { SnackbarHostState() }
     val processing by app.repository.observeProcessingCount().collectAsStateWithLifecycle(0)
+    val rereading by app.repository.observeRereadingCount().collectAsStateWithLifecycle(0)
 
     Scaffold(
         topBar = {
@@ -69,10 +70,10 @@ fun YaadRoot(onRecord: () -> Unit) {
                         }
                     },
                 )
-                if (processing > 0) {
+                if (processing > 0 || rereading > 0) {
                     LinearProgressIndicator(Modifier.fillMaxWidth())
                     Text(
-                        "Sorting your note in the background…",
+                        if (processing > 0) "Sorting your note in the background…" else "Reading ${if (rereading == 1) "an older note" else "$rereading older notes"} again…",
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),

@@ -24,11 +24,15 @@ interface NoteDao {
     @Query("SELECT * FROM notes ORDER BY createdAt DESC")
     fun observeAll(): Flow<List<NoteEntity>>
 
-    @Query("SELECT COUNT(*) FROM notes WHERE state IN ('PENDING', 'TRANSCRIBING')")
-    fun observeProcessingCount(): Flow<Int>
+    @Query("SELECT COUNT(*) FROM notes WHERE state IN ('PENDING', 'TRANSCRIBING') AND reread = :reread")
+    fun observeProcessingCount(reread: Boolean): Flow<Int>
 
-    @Query("SELECT * FROM notes WHERE state = 'PENDING' ORDER BY createdAt LIMIT 1")
+    // A note just recorded goes ahead of old notes being read again.
+    @Query("SELECT * FROM notes WHERE state = 'PENDING' ORDER BY reread, createdAt LIMIT 1")
     suspend fun nextPending(): NoteEntity?
+
+    @Query("SELECT * FROM notes")
+    suspend fun all(): List<NoteEntity>
 
     @Query("SELECT * FROM notes WHERE state = 'RECORDING' AND createdAt < :before")
     suspend fun recordingsStartedBefore(before: Long): List<NoteEntity>
@@ -71,6 +75,9 @@ interface ItemDao {
 
     @Query("SELECT * FROM items")
     suspend fun all(): List<ItemEntity>
+
+    @Query("SELECT * FROM items WHERE noteId = :noteId")
+    suspend fun byNote(noteId: Long): List<ItemEntity>
 
     @Query("SELECT EXISTS(SELECT 1 FROM items WHERE duplicateCheckedAt IS NULL)")
     suspend fun hasUncheckedForDuplicates(): Boolean

@@ -22,7 +22,8 @@ A note goes through three separate steps: recording, analysis and duplicate remo
 Main process                              :analysis process
 ────────────                              ─────────────────
 CaptureService                            AnalysisService
-  records audio to disk                     Whisper: speech to text
+  records audio to disk                     drops background noise and other voices
+                                            Whisper: speech to text
   queues the note, then stops               Qwen3: text to tasks and ideas
                                             rules: dates, and anything the model missed
                                             merges repeats within the note
@@ -39,13 +40,15 @@ DuplicateWorker (WorkManager)
 - A crash or memory kill in `:analysis` can't touch a recording in progress. Audio reaches disk as you speak, so a crash in the main process loses a moment at most.
 - Waiting notes survive crashes and reboots, and finish without the app being opened.
 - Notifications use one exact alarm, set for whatever is due next. It's worked out again from the database after every change, reboot and clock change, so anything missed while the phone was off shows up once it's back on.
+- Before Whisper hears a recording, low rumble from fans, traffic and air conditioners is filtered out, and a speech detector ([Silero VAD](https://github.com/snakers4/silero-vad)) finds each stretch of speech. Stretches more than 10 dB quieter than the speaker, such as a TV or people talking across the room, are dropped, because Whisper writes down every voice it hears, and the quiet that ends every recording is where a background voice would otherwise become a task.
 - The model decides what the items are and what kind they are. Dates are worked out by tested rules from words it has to quote from the note, a date said about a different item is ignored, items it invents are dropped, and tasks it misses that the rules caught are added back. If it fails, the rules sort the note instead. If it crashes the app, AI sorting turns itself off.
 - Small models make an item of almost every sentence, so each note is tidied afterwards. A repeat merges into the first mention, and a sentence that only says something about a task ("it's not cooling properly") moves to that task's details. It goes further than the check across notes because things said in one breath are usually about the same thing, and whatever a merged item added stays in the details. Items sorted before tidying existed are tidied the same way once, note by note, leaving anything you've edited, started or finished. What merges goes to Discarded, where you can restore it.
+- When an update improves speech or sorting, notes whose recording is still kept are read again in the background, after any new notes. Only notes whose items you haven't edited, started, finished or restored are read again. The old items go to Discarded, marked as replaced, so they can be restored.
 - Duplicate removal uses plain rules and no model, and it leaves anything uncertain on the list, because a leftover duplicate costs far less than a lost task. It ignores small words, word order and word endings, and knows a few everyday equivalents such as "ring" and "call" or "mom" and "mother". Items with different deadlines stay separate, since "pay rent" for two different dates is two tasks. Completed and discarded items are never compared, and each item is checked once, so one you restore stays on the list.
 
 ## Building
 
-Needs a JDK 21 and the Android SDK; Android Studio includes both. Outside Android Studio, set `JAVA_HOME` and `ANDROID_HOME` first. Gradle downloads the NDK, CMake and the two models (435 MB, each pinned to a revision and checked against a SHA-256).
+Needs a JDK 21 and the Android SDK; Android Studio includes both. Outside Android Studio, set `JAVA_HOME` and `ANDROID_HOME` first. Gradle downloads the NDK, CMake and the three models (590 MB, each pinned to a revision and checked against a SHA-256).
 
 ```bash
 git clone --recurse-submodules --shallow-submodules https://github.com/SameerRanjanJha/yaad.git
@@ -53,7 +56,7 @@ cd yaad
 ./gradlew :app:assembleRelease
 ```
 
-The APK, about 460 MB, is at `app/build/outputs/apk/release/app-release.apk`. Copy it to your phone and open it. Then go through the setup screen, because battery settings decide whether background analysis and reminders run on time.
+The APK, about 615 MB, is at `app/build/outputs/apk/release/app-release.apk`. Copy it to your phone and open it. Then go through the setup screen, because battery settings decide whether background analysis and reminders run on time.
 
 It needs Android 12 or newer and an ARM chip from about 2019 or later. To support older chips, remove the `GGML_CPU_ARM_ARCH` lines from the two `CMakeLists.txt` files, at the cost of speed.
 
@@ -84,16 +87,26 @@ Android's cloud backup is turned off for the app, so if you lose your phone, you
 ./gradlew :app:testDebugUnitTest
 ```
 
-The unit tests cover the note parser, date reading, tidying within a note, duplicate removal, reminder timing, audio files and how the app handles model replies.
+The unit tests cover the note parser, date reading, tidying within a note, duplicate removal, reading old notes again, reminder timing, audio files, filtering out background voices and how the app handles model replies.
 
 For the emulator, build with `-Pyaad.abis=x86_64`. Debug builds read `test-audio.wav` (16 kHz mono) from the app's external files folder instead of the mic when it exists, so the whole flow can run with known speech.
 
 `tools/score_sorting.py` and the debug-only `AiEvalActivity` score a model on a set of sample notes. The current model got 91 of 93 expected items right across 60 notes, 20 of them rambling, with 7 items more than expected. That set is small and hand-written, so treat it as a regression check, not a benchmark.
 
+The debug-only `SpeechEvalActivity` transcribes a folder of recordings with any Whisper model file, through the app's own audio filtering, for word error rates on the PC. On 16 notes spoken by the Windows Indian English voices, each recorded quietly, with fan and traffic noise, and with people talking across the room or right beside the speaker:
+
+| | Quiet | Fan and traffic | People across the room | People beside you |
+|---|---|---|---|---|
+| Whisper base, no filtering (before 2.0) | 0.5% | 2.6% | 25.3% | 50.6% |
+| Whisper small with filtering (now) | 0.8% | 1.5% | 1.3% | 41.9% |
+
+Synthetic voices are clearer than real ones, so real error rates will be higher, but the gap between the two rows is the point.
+
 ## Known limits
 
-- Recording and transcription have run on a OnePlus Nord 5. AI sorting, crash recovery, reboot recovery, duplicate removal and notifications have been tested on an Android 15 emulator.
+- Recording and transcription with the earlier, smaller speech model have run on a OnePlus Nord 5. The current speech model, background-voice filtering, reading old notes again, AI sorting, crash recovery, reboot recovery, duplicate removal and notifications have been tested on an Android 15 emulator.
 - Sorting is built for English. The Hindi + English mode is untested.
+- Someone talking right beside you, nearly as loud as you, is still written down. Only voices clearly quieter than yours are dropped.
 - Merging within a note and duplicate removal only catch repeats worded alike, so "prepare the client slides" and "make the client deck" stay as two items. Both are also built for English.
 - The one-time tidy of an existing list only sees each item's title, date and details, not the note it came from, so it catches less than tidying a new note.
 - Phones can delay background work to save battery, and a delayed note delays its reminders.
@@ -113,7 +126,8 @@ third_party/  whisper.cpp and llama.cpp, as git submodules
 
 | Component | License |
 |---|---|
-| [whisper.cpp](https://github.com/ggml-org/whisper.cpp) and the Whisper base model | MIT |
+| [whisper.cpp](https://github.com/ggml-org/whisper.cpp) and the Whisper small model | MIT |
+| [Silero VAD](https://github.com/snakers4/silero-vad), [converted by ggml-org](https://huggingface.co/ggml-org/whisper-vad) | MIT |
 | [llama.cpp](https://github.com/ggml-org/llama.cpp) | MIT |
 | [Qwen3 0.6B](https://huggingface.co/Qwen/Qwen3-0.6B), [quantized by Unsloth](https://huggingface.co/unsloth/Qwen3-0.6B-GGUF) | Apache 2.0 |
 | AndroidX, Jetpack Compose, Room, WorkManager | Apache 2.0 |

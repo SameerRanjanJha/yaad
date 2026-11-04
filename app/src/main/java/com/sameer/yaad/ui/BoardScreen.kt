@@ -177,9 +177,14 @@ private fun ItemRow(item: ItemEntity, onOpen: () -> Unit, onMove: (Bucket) -> Un
                 )
             }
             DeadlineLabel(item, finished)
-            if (item.duplicateOfId != null) {
+            val setAside = when {
+                item.replacedAt != null -> "Replaced by a new reading"
+                item.duplicateOfId != null -> "Merged into another item"
+                else -> null
+            }
+            if (setAside != null) {
                 Text(
-                    "Merged into another item",
+                    setAside,
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

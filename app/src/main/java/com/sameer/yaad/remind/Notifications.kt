@@ -24,6 +24,7 @@ object Notifications {
     private const val LOCK_SCREEN_MIC_ID = 2
     private const val DUPLICATES_ID = 3
     private const val DAILY_CHECK_IN_ID = 4
+    private const val NOTES_REREAD_ID = 5
     private const val DEADLINE_ID_BASE = 10_000
     private const val NOTE_RESULT_ID_BASE = 1_000_000
 
@@ -178,6 +179,18 @@ object Notifications {
 
     fun showListTidied(context: Context, removed: List<ItemEntity>) =
         showMovedToDiscarded(context, "Tidied your list: merged ${plural(removed.size, "item")} into others", removed)
+
+    fun showNotesReread(context: Context, notes: Int) {
+        if (!canPost(context)) return
+        val notification = NotificationCompat.Builder(context, CHANNEL_RESULTS)
+            .setSmallIcon(R.drawable.ic_check)
+            .setContentTitle("Read ${plural(notes, "older note")} again")
+            .setContentText("Their items are updated. The old ones are in Discarded.")
+            .setAutoCancel(true)
+            .setContentIntent(openApp(context))
+            .build()
+        manager(context).notify(NOTES_REREAD_ID, notification)
+    }
 
     /** Says what went where, so a wrong call gets noticed and can be restored. */
     private fun showMovedToDiscarded(context: Context, title: String, removed: List<ItemEntity>) {

@@ -3,6 +3,8 @@ package com.sameer.yaad.dedupe
 import com.sameer.yaad.data.Bucket
 import com.sameer.yaad.data.ItemEntity
 import com.sameer.yaad.data.deadline
+import com.sameer.yaad.data.isAsSorted
+import com.sameer.yaad.data.toParsedItem
 import com.sameer.yaad.data.withDeadline
 import com.sameer.yaad.parse.NoteTidier
 import com.sameer.yaad.parse.ParsedItem
@@ -20,7 +22,7 @@ internal object ListTidier {
     fun run(items: List<ItemEntity>, now: Long): Pass {
         val changed = mutableListOf<ItemEntity>()
         val removed = mutableListOf<ItemEntity>()
-        val asSorted = items.filter { isAsSorted(it, items) }
+        val asSorted = items.filter { it.isAsSorted(items) }
         for (noteItems in asSorted.groupBy { it.noteId }.values) {
             val inOrder = noteItems.sortedBy { it.id }
             for (group in NoteTidier.group(inOrder.map { it.toParsedItem() })) {
@@ -37,14 +39,6 @@ internal object ListTidier {
         return Pass(changed, removed)
     }
 
-    /**
-     * Untouched since it was sorted, apart from duplicate removal merging a later copy into it,
-     * which leaves the copy with the same update time.
-     */
-    private fun isAsSorted(item: ItemEntity, items: List<ItemEntity>): Boolean =
-        item.bucket == Bucket.TODO &&
-            (item.updatedAt == item.createdAt || items.any { it.duplicateOfId == item.id && it.updatedAt == item.updatedAt })
-
     private fun tidy(item: ItemEntity, tidied: ParsedItem, now: Long): ItemEntity {
         val deadlineChanged = item.deadline != tidied.deadline
         return item.withDeadline(tidied.deadline).copy(
@@ -58,6 +52,4 @@ internal object ListTidier {
             duplicateCheckedAt = null,
         )
     }
-
-    private fun ItemEntity.toParsedItem() = ParsedItem(kind, title, detail, deadline)
 }
